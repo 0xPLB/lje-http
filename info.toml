@@ -1,0 +1,6 @@
+[script]
+name = "lje-http"
+version = "0.1.0"
+author = "yogwoggf"
+dependencies = []
+binaries = ["lje-ffi"]
