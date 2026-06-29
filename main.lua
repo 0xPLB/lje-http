@@ -12,13 +12,3 @@ end)
 hook.Listen()
 
 _G.http = http
-
--- ---- demo (safe to delete) -------------------------------------------------
-http.get("https://example.com", nil, function(res)
-  if res.ok then
-    lje.con_printf("$green{[lje-http]} GET %s -> %d (%d bytes)", res.url, res.status, #res.body)
-    lje.con_printf("$green{[lje-http]} Body: %s", res.body)
-  else
-    lje.con_printf("$red{[lje-http]} GET %s failed: %s", res.url, tostring(res.error))
-  end
-end)
