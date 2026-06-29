@@ -2,7 +2,7 @@
 -- Binds the subset of the easy + multi interfaces the async layer needs,
 -- and performs the one-time curl_global_init.
 
-local DLL_NAME = "libcurl-x64.dll"
+local DLL_NAME = "bin/libcurl-x64.dll"
 
 ---@return string? path
 local function resolve_dll_path()
