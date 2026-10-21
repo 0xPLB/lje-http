@@ -1,7 +1,10 @@
 -- Asynchronous HTTP on top of libcurl's multi interface.
 
+local log = lje.con_printf or function(fmt, ...)
+  lje.con_print((string.format(fmt, ...):gsub("%$%a+(%b{})", function(s) return s:sub(2, -2) end)))
+end
 ---@module "lje-http.curl"
-local curl = lje.require("curl.lua")
+local curl = (lje.require or lje.include)("curl.lua")
 if not curl then
   return nil
 end
@@ -10,7 +13,7 @@ local C, OPT, INFO = curl.C, curl.OPT, curl.INFO
 
 local multi = C.multi_init()
 if not multi or multi == 0 then
-  lje.con_printf("$red{[lje-http]} curl_multi_init failed")
+  log("$red{[lje-http]} curl_multi_init failed")
   return nil
 end
 
@@ -22,6 +25,7 @@ local active = {} ---@type table<integer, table>  -- [id]  = request record
 local by_handle = {} ---@type table<number, integer> -- [easy] = id
 local queue = {} ---@type table[]                 -- completed events awaiting poll()
 local next_id = 1
+local shut_down = false
 
 -- Single shared write callback. curl passes our per-request id back as the
 -- WRITEDATA pointer, which we use to find the right buffer.
@@ -40,6 +44,9 @@ end)
 ---@param opts { url: string, method?: string, headers?: table<string,string>, body?: string, timeout?: integer, on_complete?: fun(res: table), on_error?: fun(res: table) }
 ---@return integer? id, string? err
 local function request(opts)
+  if shut_down then
+    return nil, "lje-http has been shut down"
+  end
   local easy = C.easy_init()
   if not easy or easy == 0 then
     return nil, "curl_easy_init failed"
@@ -136,7 +143,7 @@ local function finalize(easy, result_code)
   if handler then
     local pcok, perr = pcall(handler, res)
     if not pcok then
-      lje.con_printf("$red{[lje-http]} callback error: %s", tostring(perr))
+      log("$red{[lje-http]} callback error: %s", tostring(perr))
     end
   end
   queue[#queue + 1] = res
@@ -144,7 +151,7 @@ end
 
 --- Drive all in-flight transfers forward.
 local function pump()
-  if next(active) == nil then
+  if shut_down or next(active) == nil then
     return
   end
 
@@ -186,8 +193,11 @@ local function pending()
   return n
 end
 
--- Free native resources when the game tears down the Lua state.
-lje.env.on_cleanup(function()
+local function shutdown()
+  if shut_down then
+    return
+  end
+  shut_down = true
   for _, req in pairs(active) do
     C.multi_remove(multi, req.easy)
     C.easy_cleanup(req.easy)
@@ -195,17 +205,18 @@ lje.env.on_cleanup(function()
       C.slist_free_all(req.headers_slist)
     end
   end
+  active, by_handle, queue = {}, {}, {}
   C.multi_cleanup(multi)
-  C.global_cleanup()
   ffi.callback.remove(write_handle)
   ffi.mem.free(scratch)
-end)
+end
 
 return {
   request = request,
   pump = pump,
   poll = poll,
   pending = pending,
+  shutdown = shutdown,
 
   -- convenience wrappers
   get = function(url, headers, on_complete, on_error)

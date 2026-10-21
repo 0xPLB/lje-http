@@ -12,6 +12,12 @@ This module is asynchronous just like the original GMod HTTP function, and is de
 
 Once the script is loaded it exposes a global `http` table.
 
+The module is loaded from `boot.lua` and lives for the whole process. It is pumped by a
+menu-state engine call hook, so requests also work in the main menu and survive map
+changes and reconnects. The global `http` is set at boot, so other scripts can use it from
+their own `boot.lua` as well as `main.lua`. If loading at boot fails, `main.lua`
+falls back to a per-session instance that is cleaned up on disconnect.
+
 ### `http.request(opts) -> id?, err?`
 
 Starts a request. Returns an integer `id` you can correlate with the result, or

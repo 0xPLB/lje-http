@@ -1,6 +1,6 @@
 [script]
 name = "lje-http"
-version = "0.1.0"
-author = "yogwoggf"
+version = "0.1.0-menufix"
+author = "yogwoggf" # + pngmeow
 dependencies = []
 binaries = ["lje-ffi"]

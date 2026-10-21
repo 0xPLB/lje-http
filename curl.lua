@@ -2,32 +2,42 @@
 -- Binds the subset of the easy + multi interfaces the async layer needs,
 -- and performs the one-time curl_global_init.
 
-local DLL_NAME = "bin/libcurl-x64.dll"
+local log = lje.con_printf or function(fmt, ...)
+  lje.con_print((string.format(fmt, ...):gsub("%$%a+(%b{})", function(s) return s:sub(2, -2) end)))
+end
 
----@return string? path
-local function resolve_dll_path()
+local DLL_NAME = "libcurl-x64.dll"
+
+local CANDIDATES = {
+  "bin/" .. DLL_NAME,
+  "../../binaries/" .. DLL_NAME,
+}
+
+local function script_dir()
   local script_path = lje.env.current_script_path()
   if not script_path then
     return nil
   end
-
-  local dir = string.match(script_path, "^(.*[\\/])")
-  if not dir then
-    return nil
-  end
-
-  return dir .. DLL_NAME
+  return string.match(script_path, "^(.*[\\/])")
 end
 
-local path = resolve_dll_path()
-if not path then
-  lje.con_printf("$red{[lje-http]} could not resolve a path for %s", DLL_NAME)
+local dir = script_dir()
+if not dir then
+  log("$red{[lje-http]} could not resolve the script folder to find %s", DLL_NAME)
   return nil
 end
 
-local handle = ffi.module.load(path)
+local handle, path
+for _, rel in ipairs(CANDIDATES) do
+  path = dir .. rel
+  handle = ffi.module.load(path)
+  if handle then
+    break
+  end
+end
+
 if not handle then
-  lje.con_printf("$red{[lje-http]} ffi.module.load failed for %s", path)
+  log("$red{[lje-http]} ffi.module.load failed for %s (looked in bin/ and .lje/binaries/)", DLL_NAME)
   return nil
 end
 
@@ -42,7 +52,7 @@ end
 local function bind(name, sig)
   local fn = ffi.module.bind_export(handle, name, sig)
   if not fn then
-    lje.con_printf("$red{[lje-http]} missing curl export: %s", name)
+    log("$red{[lje-http]} missing curl export: %s", name)
   end
   return fn
 end
@@ -78,14 +88,14 @@ local global_init = bind("curl_global_init", "ii")
 if global_init then
   local rc = global_init(3)
   if rc ~= 0 then
-    lje.con_printf("$red{[lje-http]} curl_global_init failed (CURLcode %s)", tostring(rc))
+    log("$red{[lje-http]} curl_global_init failed (CURLcode %s)", tostring(rc))
   end
 end
 
 -- Smoke test / banner.
 local curl_version = bind("curl_version", "s")
 local version = curl_version and curl_version() or "<unknown>"
-lje.con_printf("$green{[lje-http]} libcurl loaded: %s", tostring(version))
+log("$green{[lje-http]} libcurl loaded: %s", tostring(version))
 
 return {
   handle = handle,
